@@ -1,0 +1,324 @@
+esphome:
+  name: vindriktningplus
+  friendly_name: VindriktningPlus
+  on_boot:
+    then:
+      - light.turn_on:
+          id: status_led
+          brightness: !lambda return id(led_brightness).state;
+          effect: "Boot Pulse"
+      - wait_until:
+          timeout: 30s
+          condition:
+            and:
+              - wifi.connected:
+              - api.connected:
+      - light.turn_on:
+          id: status_led
+          brightness: !lambda return id(led_brightness).state;
+          effect: "Air Quality"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret vindriktingplus_api
+  services:
+    - service: play_rtttl
+      variables:
+        song_str: string
+      then:
+        - rtttl.play:
+            id: rtttl_module
+            rtttl: !lambda 'return "song_str";'
+
+ota:
+  password: !secret vindriktingplus_ota
+
+wifi:
+  networks:
+    ssid: !secret wifi_ssid
+    password: !secret wifi_password
+    hidden: true
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Vindriktningplus"
+    password: "Vindriktningplus"
+
+captive_portal:
+
+number:
+  # LED brightness in day mode (in percent)
+  - platform: template
+    id: led_brightness
+    name: "Led Brightness"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: True
+    restore_value: True
+    on_value:
+      then:
+        - lambda: id(status_led).remote_values.set_brightness(id(led_brightness).state/100);
+
+  # LED brightness in night mode (in percent)
+  - platform: template
+    id: led_night_mode
+    name: "Led Night Brightness"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: True
+    restore_value: True
+
+  # PM1006 fan speed in percent
+  - platform: template
+    id: pm1006_fan_speed
+    name: "PM1006 Fan Speed"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: True
+    restore_value: True
+    on_value:
+      then:
+        - lambda: id(pm1006_fan_ctrl).speed  = id(pm1006_fan_speed).state;
+
+select:
+  # switch between three predefined fan modes for the PM1006 fan
+  - platform: template
+    name: "PM1006 measurment mode"
+    id: pm1006_mode
+    options:
+      - "Fan automatic mode"
+      - "Fan always on"
+      - "Fan manual mode"
+    initial_option: "Fan automatic mode"
+    optimistic: True
+
+button:
+  # Button to force an measuremnt cycle for the PM1006
+  - platform: template
+    name: "Force PM1006 measurement"
+    on_press:
+      then:
+        - script.execute: pm1006_measurement_script
+
+binary_sensor:
+  # pseudo sensor to switch between day and night mode
+  #   night mode deactivats the PM1006 measurements, since the fan has to run
+  - platform: template
+    name: "Night Mode"
+    id: night_mode
+    publish_initial_state: True
+
+# uart used for PM1006 exclusively
+uart:
+  rx_pin: GPIO4
+  tx_pin: GPIO5
+  baud_rate: 9600
+  id: uart_a
+
+# main i2c bus
+i2c:
+  scl: GPIO7
+  sda: GPIO8
+  id: bus_a
+  frequency: 100kHz
+
+text_sensor:
+  # ESPHome version string
+  - platform: version
+    name: ${device_name} ESPHome Version
+
+  # fancy wifi information
+  - platform: wifi_info
+    ip_address:
+      name: ${device_name} IP
+    ssid:
+      name: ${device_name} SSID
+    bssid:
+      name: ${device_name} BSSID
+
+sensor:
+  # board uptime
+  - platform: uptime
+    name: ${device_name} Uptime
+
+  # WiFi signal information
+  - platform: wifi_signal
+    name: ${device_name} WiFi Signal
+    update_interval: 60s
+
+  # The PM1006 particle sensor in the Vindrikting
+  - platform: pm1006
+    uart_id: uart_a
+    id: pm1006_module
+    pm_2_5:
+      internal: True
+      id: _pm1006_pm_2_5
+
+  # PM2.5 sensor which'll get updated by interval
+  - platform: template
+    name: "Particulate Matter 2.5µm Concentration"
+    id: "pm1006_pm_2_5"
+    unit_of_measurement: "µg/m³"
+    icon: "mdi:blur"
+
+  # CO2, temperature & humidity sensor
+  - platform: scd4x
+    i2c_id: bus_a
+    co2:
+      name: "CO2"
+    temperature:
+      name: "Temperature"
+      id: scd4x_temperature
+    humidity:
+      name: "Humidity"
+      id: scd4x_humidity
+    measurement_mode: low_power_periodic
+    update_interval: 60s
+
+  # - platform: bme280
+  #   i2c_id: bus_a
+  #   temperature:
+  #     name: "BME280 Temperature"
+  #     id: bme280_temperature
+  #   humidity:
+  #     name: "BME280 Humidity"
+  #     id: bme280_humidity
+  #   pressure:
+  #     name: "BME280 Pressure"
+  #     id: bme280_pressure
+  #   update_interval: 60s
+
+  # calculate the absolute humidity
+  - platform: absolute_humidity
+    name: "Absolute Humidity"
+    temperature: scd4x_temperature # change to "bme280_humidity" for BME280
+    humidity: scd4x_temperature # change to "bme280_temperature" for BME280
+
+  # Phototransistor
+  - platform: adc
+    pin: GPIO3
+    name: Illuminance
+    unit_of_measurement: lux
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 15
+
+output:
+  - platform: ledc
+    pin: GPIO0
+    frequency: 25kHz
+    id: pm1006_fan
+    channel: 0
+  - platform: ledc
+    pin: GPIO1
+    channel: 2
+    id: buzzer_out
+
+fan:
+  - platform: speed
+    name: "PM1006 Fan"
+    output: pm1006_fan
+    id: pm1006_fan_ctrl
+    speed_count: 100
+
+remote_receiver:
+  pin: GPIO6
+  dump: all
+
+rtttl:
+  output: buzzer_out
+  id: rtttl_module
+
+light:
+  - platform: esp32_rmt_led_strip
+    pin: GPIO2
+    rgb_order: GRB
+    num_leds: 3
+    rmt_channel: 0
+    chipset: WS2812
+    name: "Status LEDs"
+    id: status_led
+    on_turn_on:
+      - then:
+          - light.turn_on:
+              id: status_led
+              brightness: !lambda |-
+                const auto val = id(night_mode).state ? id(led_night_mode).state : id(led_brightness).state;
+                return float(val) / 100;
+
+    effects:
+      - pulse:
+          transition_length: 1s
+          update_interval: 1s
+          name: "Boot Pulse"
+      - automation:
+          name: "Air Quality"
+          sequence:
+            then:
+              - addressable_lambda:
+                  id: status_led
+                  lambda: |-
+                    return;
+
+# optional lcd
+# font:
+#   - file: "gfonts://Roboto"
+#     id: roboto
+#     size: 10
+
+# display:
+#   - platform: ssd1306_i2c
+#     model: SSD1306_128X32
+#     id: mini_display
+#     pages:
+#       - id: page1
+#         lambda: |-
+#           it.printf(5, 10, id(roboto), "PM2.5 %0.2f µg/m³", id(pm1006_pm_2_5).state);
+#           it.printf(5, 15, id(roboto), "Temperature: %0.2f °C", id(scd4x_temperature).state);
+#           it.printf(5, 20, id(roboto), "Humidity: %0.2f %", id(scd4x_humidity).state);
+#       - id: page2
+#         lambda: |-
+#           it.strftime(10, 15, id(roboto), "%Y-%m-%d %H:%M", id(ha_time).now());
+
+script:
+  - id: pm1006_measurement_script
+    mode: single
+    then:
+      - fan.turn_on:
+          id: pm1006_fan_ctrl
+          speed: !lambda "return id(pm1006_fan_speed).state;"
+      - delay: 20s
+      - component.update: pm1006_module
+      - sensor.template.publish:
+          id: pm1006_pm_2_5
+          state: !lambda |-
+            return id(_pm1006_pm_2_5).state;
+      - delay: 200ms
+      - fan.turn_off: pm1006_fan_ctrl
+
+interval:
+  - interval: 60s
+    id: pm1006_measurement
+    then:
+      - if:
+          condition:
+            - binary_sensor.is_off: night_mode
+          then:
+            - script.execute: pm1006_measurement_script
+
+time:
+  - platform: homeassistant
+    id: ha_time
