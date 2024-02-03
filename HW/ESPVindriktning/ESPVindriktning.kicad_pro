@@ -45,7 +45,7 @@
         "silk_text_thickness": 0.15,
         "silk_text_upright": true,
         "zones": {
-          "min_clearance": 0.19999999999999998
+          "min_clearance": 0.127
         }
       },
       "diff_pair_dimensions": [
@@ -659,14 +659,14 @@
         "clearance": 0.127,
         "diff_pair_gap": 0.127,
         "diff_pair_via_gap": 0.25,
-        "diff_pair_width": 0.131318,
+        "diff_pair_width": 0.2088,
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
         "name": "USB",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.127,
+        "schematic_color": "rgb(255, 0, 255)",
+        "track_width": 0.2088,
         "via_diameter": 0.5,
         "via_drill": 0.3,
         "wire_width": 6
@@ -676,12 +676,11 @@
       "version": 3
     },
     "net_colors": null,
-    "netclass_assignments": null,
+    "netclass_assignments": {
+      "/USB_D+": "USB",
+      "/USB_D-": "USB"
+    },
     "netclass_patterns": [
-      {
-        "netclass": "USB",
-        "pattern": "USB_D"
-      },
       {
         "netclass": "Supply 1A",
         "pattern": "+5V"
@@ -689,6 +688,14 @@
       {
         "netclass": "Supply 1A",
         "pattern": "+3.3V"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "USB_D+"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "USB_D-"
       }
     ]
   },
