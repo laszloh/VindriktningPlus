@@ -13,10 +13,7 @@ esphome:
             and:
               - wifi.connected:
               - api.connected:
-      - light.turn_on:
-          id: status_led
-          brightness: !lambda return id(led_brightness).state;
-          effect: "Air Quality"
+      - light.turn_off: status_led
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -54,6 +51,10 @@ wifi:
     password: "Vindriktningplus"
 
 captive_portal:
+
+substitutions:
+  pos-latitude: "48.210033°"
+  pos-longitude: "16.363449°"
 
 number:
   # LED brightness in day mode (in percent)
@@ -112,7 +113,7 @@ button:
       then:
         - script.execute: pm1006_measurement_script
 
-binary_sensor:
+switch:
   # pseudo sensor to switch between day and night mode
   #   night mode deactivats the PM1006 measurements, since the fan has to run
   - platform: template
@@ -215,6 +216,8 @@ sensor:
       - sliding_window_moving_average:
           window_size: 15
           send_every: 15
+      - lambda: |-
+          return (x * 3.3 / 10000.0) * 2000000.0;
 
 output:
   - platform: ledc
@@ -260,18 +263,53 @@ light:
                 return float(val) / 100;
 
     effects:
+      # pulsing light for boot-up until we the unit is connected to wifi
       - pulse:
           transition_length: 1s
           update_interval: 1s
           name: "Boot Pulse"
-      - automation:
-          name: "Air Quality"
+
+      # color effect used when unit is not connected to the api
+      - automation: 
+          name: "Standalone"
           sequence:
-            then:
-              - addressable_lambda:
-                  id: status_led
-                  lambda: |-
-                    return;
+            - addressable_lambda:
+              name: "PM2.5 Air Quality"
+              id: status_led
+              lambda: |-
+                it.range(0, 2) = Color::BLACK;
+                
+                constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 3> ranges = {
+                  {numeric_limits<uint16_t>::min(), 35, Color(0, 255, 0)}, // green
+                  {35, 85, Color(255,165,0)}, // orange
+                  {85, numeric_limits<uint16_t>::max(), Color(255, 0, 0)} //red
+                };
+
+                for(size_t i=0;i<ranges.size();i++) {
+                  const auto [lower, upper, color] = e;
+                  if(sensor_value >= lower && sensor_value < higher) {
+                    it[i] = color;
+                  }
+                }
+              - delay: 30s
+            - addressable_lambda:
+              name: "CO2 Air Quality"
+              id: status_led
+              lambda: |-
+                it.range(0, 2) = Color::BLACK;
+                
+                constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 3> ranges = {
+                  {numeric_limits<uint16_t>::min(), 35, Color(0, 255, 0)}, // green
+                  {35, 85, Color(255,165,0)}, // orange
+                  {85, numeric_limits<uint16_t>::max(), Color(255, 0, 0)} //red
+                };
+
+                for(size_t i=0;i<ranges.size();i++) {
+                  const auto [lower, upper, color] = e;
+                  if(sensor_value >= lower && sensor_value < higher) {
+                    it[i] = color;
+                  }
+                }
 
 # optional lcd
 # font:
@@ -309,6 +347,26 @@ script:
       - delay: 200ms
       - fan.turn_off: pm1006_fan_ctrl
 
+sun:
+  latitude: ${pos-latitude}
+  longitude: ${pos-longitude}
+  on_sunrise:
+    then:
+      - if:
+          condition:
+            - not:
+                - api:
+          then:
+            - switch.turn_off: night_mode
+  on_sunset:
+    then:
+      - if:
+          condition:
+            - not:
+                - api:
+          then:
+            - switch.turn_on: night_mode
+
 interval:
   - interval: 60s
     id: pm1006_measurement
@@ -322,3 +380,6 @@ interval:
 time:
   - platform: homeassistant
     id: ha_time
+  - platform: sntp
+    id: sntp_time
+    update_interval: 60min
