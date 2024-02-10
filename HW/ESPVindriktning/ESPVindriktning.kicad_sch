@@ -4640,7 +4640,7 @@
     (property "Reference" "X108" (at 182.88 101.9556 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Value" "I2C" (at 182.88 104.4956 0)
+    (property "Value" "UART" (at 182.88 104.4956 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
     (property "Footprint" "Connector_JST:JST_SH_BM04B-SRSS-TB_1x04-1MP_P1.00mm_Vertical" (at 180.34 101.6 0)
