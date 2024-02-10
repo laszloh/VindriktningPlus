@@ -55,22 +55,7 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [
-        "lib_footprint_mismatch|110000000|54300000|3d3bb42d-f2cc-4b54-a542-ac063ca622aa|00000000-0000-0000-0000-000000000000",
-        "lib_footprint_mismatch|110100000|121965000|7b96841e-c626-422e-b7b0-d9fe8b54fec2|00000000-0000-0000-0000-000000000000",
-        "lib_footprint_mismatch|117900000|54300000|b72e5e0b-f13e-49c0-acb9-4b9f94e93238|00000000-0000-0000-0000-000000000000",
-        "lib_footprint_mismatch|127500000|59300000|d5c4368d-cf08-4e49-8bb0-65d6141eb06c|00000000-0000-0000-0000-000000000000",
-        "lib_footprint_mismatch|127500000|66200000|0f2f0f95-8e9a-4a67-9a8d-6e6007658f71|00000000-0000-0000-0000-000000000000",
-        "lib_footprint_mismatch|96750000|56000000|2854a447-ae7f-462f-940a-2263ea08e207|00000000-0000-0000-0000-000000000000",
-        "silk_edge_clearance|130000000|71853000|f6927542-233c-40ab-a849-67465b9e0553|8973b704-d488-4f49-9a4f-2af3a63edfe7",
-        "silk_edge_clearance|130000000|75802492|f6927542-233c-40ab-a849-67465b9e0553|332e474f-22fa-4e70-af44-14eb9c942e8b",
-        "silk_edge_clearance|130000000|86146075|f6927542-233c-40ab-a849-67465b9e0553|6f712b9d-efe1-49f1-8771-80730fbd185f",
-        "silk_edge_clearance|130000000|87347000|f6927542-233c-40ab-a849-67465b9e0553|c3807122-ae5f-46d5-80ec-7ae40208c93d",
-        "silk_edge_clearance|92000000|63060000|edefe90f-c087-4afd-ad6e-dcae94183291|ab8c2d7e-35d1-430d-bf4b-549f6fa24276",
-        "silk_edge_clearance|92000000|63060000|edefe90f-c087-4afd-ad6e-dcae94183291|e036ab1e-f38f-4eff-8e98-bb4f9cce0b77",
-        "silk_edge_clearance|92000000|81060000|edefe90f-c087-4afd-ad6e-dcae94183291|e3094796-803c-4416-bd81-3f8e855b09e5",
-        "silk_over_copper|128424571|75012500|332e474f-22fa-4e70-af44-14eb9c942e8b|00000000-0000-0000-0000-000000000000"
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },
@@ -715,8 +700,8 @@
       "idf": "",
       "netlist": "",
       "specctra_dsn": "",
-      "step": "",
-      "vrml": ""
+      "step": "../MECH/PCB.step",
+      "vrml": "../MECH/PCB.wrl"
     },
     "page_layout_descr_file": ""
   },
