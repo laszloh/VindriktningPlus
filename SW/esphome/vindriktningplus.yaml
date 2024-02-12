@@ -27,11 +27,33 @@ substitutions:
   aqi_message_acceptable: "Acceptable"
   aqi_message_good: "Good"
 
+globals:
+  - id: pm_min
+    type: float
+    initial_value: '300.0'
+  - id: pm_max
+    type: float
+    initial_value: '0.0'
+  - id: co_min
+    type: float
+    initial_value: '5000.0'
+  - id: co_max
+    type: float
+    initial_value: '0.0'
+  - id: temp_min
+    type: float
+    initial_value: '50.0'
+  - id: temp_max
+    type: float
+    initial_value: '0.0'
+
 esphome:
   name: vindriktningplus
   friendly_name: VindriktningPlus
   on_boot:
     then:
+      - lambda: 'id(pm2_5).publish_state(1.0);'
+      - lambda: 'id(co2).publish_state(400);'
       - light.turn_on:
           id: status_led
           brightness: !lambda return id(led_brightness).state;
@@ -43,14 +65,19 @@ esphome:
               - wifi.connected:
               - api.connected:
       - light.turn_off: status_led
+      - script.execute: min_max_zero_script
 
 esp32:
   board: esp32-c3-devkitm-1
   framework:
-    type: arduino
+    type: esp-idf
 
 # Enable logging
 logger:
+
+# Enable bluetooth proxy
+# bluetooth_proxy:
+#   active: true
 
 # Enable Home Assistant API
 api:
@@ -141,6 +168,12 @@ button:
     on_press:
       then:
         - script.execute: pm1006_measurement_script
+  # Reset measurement values
+  - platform: template
+    name: "Reset min/max values"
+    on_press: 
+      then:
+        - script.execute: min_max_zero_script
 
 switch:
   # pseudo sensor to switch between day and night mode
@@ -168,7 +201,6 @@ text_sensor:
   # ESPHome version string
   - platform: version
     name: ${device_name} ESPHome Version
-
   # fancy wifi information
   - platform: wifi_info
     ip_address:
@@ -182,12 +214,10 @@ sensor:
   # board uptime
   - platform: uptime
     name: ${device_name} Uptime
-
   # WiFi signal information
   - platform: wifi_signal
     name: ${device_name} WiFi Signal
     update_interval: 60s
-
   # The PM1006 particle sensor in the Vindrikting
   - platform: pm1006
     uart_id: uart_a
@@ -200,21 +230,147 @@ sensor:
   # PM2.5 sensor which'll get updated by interval
   - platform: template
     name: "Particulate Matter 2.5µm Concentration"
-    id: "pm1006_pm_2_5"
+    id: "pm2_5"
     unit_of_measurement: "µg/m³"
     icon: "mdi:blur"
+    on_value: 
+      then:
+          - lambda: |-
+              // configs
+              // WHO2015: AQI Concentration Breakpüoints by Pollutant 
+              constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 6> ranges = {
+                  {0, 12, Color(0x00, 0x99, 0x66)}, // green
+                  {12, 35, Color(0xff, 0xde, 0x33)}, // yellow
+                  {35, 55, Color(0xff, 0x99, 0x33)}, // orange
+                  {55, 150, Color(0xcc, 0x00, 0x33)}, // red
+                  {150, 250, Color(0x66, 0x00, 0x99)} // violette
+                  {250, numeric_limits<uint16_t>::max(), Color(0x7e, 0x00, 0x23)} // deep red
+                }; 
+              auto led = id(led1).turn_on();
+              // execute the led coloring
+              const auto val = id(co2).state;
+              for(const auto &e: ranges) {
+                  const auto [lower, upper, color] = e;
+                  if(sensor_value >= lower && sensor_value < higher) {
+                    led.set_rgb(color.r, color.g, color.b);
+                    led.perform();
+                    break;
+                  }
+              }
+        - lambda: |-
+            // update min & max
+            const auto cval = id(pm2_5).state;
+            if(cval > id(pm_max)) {
+              id(pm_max) = cval;
+            } else if(cval < id(pm_min)) {
+              id(pm_min) = cval;
+            }
+
+  # PM 2.5 24h average
+  - platform: template
+    name: "PM2.5 24h average"
+    id: pm2_5_avg
+    icon: mdi:chemical-weapon
+    unit_of_measurement: µg/m³
+    lambda: |-
+      return id(pm_2_5).state;
+    update_interval: 60s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 1440
+          send_every: 1
+    on_value: 
+      then:
+          - lambda: |-
+              // configs
+              // WHO2015: AQI Concentration Breakpüoints by Pollutant 
+              constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 6> ranges = {
+                  {0, 12, Color(0x00, 0x99, 0x66)}, // green
+                  {12, 35, Color(0xff, 0xde, 0x33)}, // yellow
+                  {35, 55, Color(0xff, 0x99, 0x33)}, // orange
+                  {55, 150, Color(0xcc, 0x00, 0x33)}, // red
+                  {150, 250, Color(0x66, 0x00, 0x99)} // violette
+                  {250, numeric_limits<uint16_t>::max(), Color(0x7e, 0x00, 0x23)} // deep red
+                }; 
+              auto led = id(led2).turn_on();
+              // execute the led coloring
+              const auto val = id(co2).state;
+              for(const auto &e: ranges) {
+                  const auto [lower, upper, color] = e;
+                  if(sensor_value >= lower && sensor_value < higher) {
+                    led.set_rgb(color.r, color.g, color.b);
+                    led.perform();
+                    break;
+                  }
+              }
+
+  # This is a "helper" template sensor which is doing 30 sec moving average of PM2.5
+  - platform: template
+    name: "PM2.5 median"
+    id: pm2_5_median
+    icon: mdi:chemical-weapon
+    unit_of_measurement: µg/m³
+    lambda: |-
+      return id(pm2_5).state;
+    update_interval: 1s
+    filters:
+      - median:
+          window_size: 30
+          send_every: 30
+          send_first_at: 15
 
   # CO2, temperature & humidity sensor
   - platform: scd4x
     i2c_id: bus_a
     co2:
       name: "CO2"
+      id: co2
+      on_value: 
+        then:
+          - lambda: |-
+              // configs
+              constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 5> ranges = {
+                  {0,    700, Color(0x00, 0x99, 0x66)},  // green
+                  {700,  1000, Color(0xff, 0xde, 0x33)}, // yellow
+                  {1000, 1500, Color(0xff, 0x99, 0x33)}, // orange
+                  {1500, 2100, Color(0xcc, 0x00, 0x33)}, // red
+                  {2100, numeric_limits<uint16_t>::max(), Color(0x66, 0x00, 0x99)} // violette
+                }; 
+              auto led = id(led3).turn_on();
+              // execute the led coloring
+              const auto val = id(co2).state;
+              for(const auto &e: ranges) {
+                  const auto [lower, upper, color] = e;
+                  if(sensor_value >= lower && sensor_value < higher) {
+                    led.set_rgb(color.r, color.g, color.b);
+                    led.perform();
+                    break;
+                  }
+              }
+          - lambda: |-
+              // update min & max
+              const auto cval = id(co2).state;
+              if(cval > id(co2_max)) {
+                id(co2_max) = cval;
+              } else if(cval < id(co2_min)) {
+                id(co2_min) = cval;
+              }              
     temperature:
       name: "Temperature"
-      id: scd4x_temperature
+      id: temperature
+      on_value: 
+        then:
+          - lambda: |-
+              // update min & max
+              const auto cval = id(temperature).state;
+              if(cval > id(temp_max)) {
+                id(temp_max) = cval;
+              } else if(cval < id(temp_min)) {
+                id(temp_min) = cval;
+              }
     humidity:
       name: "Humidity"
-      id: scd4x_humidity
+      id: humidity
     measurement_mode: low_power_periodic
     update_interval: $SCD4x_update_interval
     temperature_offset: $temp_calibration
@@ -223,20 +379,20 @@ sensor:
   #   i2c_id: bus_a
   #   temperature:
   #     name: "BME280 Temperature"
-  #     id: bme280_temperature
+  #     id: temperature
   #   humidity:
   #     name: "BME280 Humidity"
-  #     id: bme280_humidity
+  #     id: humidity
   #   pressure:
   #     name: "BME280 Pressure"
-  #     id: bme280_pressure
+  #     id: pressure
   #   update_interval: 60s
 
   # calculate the absolute humidity
   - platform: absolute_humidity
     name: "Absolute Humidity"
-    temperature: scd4x_temperature # change to "bme280_humidity" for BME280
-    humidity: scd4x_temperature # change to "bme280_temperature" for BME280
+    temperature: temperature
+    humidity: humidity
 
   # Phototransistor
   - platform: adc
@@ -278,6 +434,30 @@ rtttl:
   id: rtttl_module
 
 light:
+  - platform: partition
+    name: LED 1
+    id: led1
+    default_transition_length: 0s
+    segments: 
+      - id: rgb_led
+      from: 0
+      to: 0
+  - platform: partition
+    name: LED 2
+    id: led2
+    default_transition_length: 0s
+    segments: 
+      - id: rgb_led
+      from: 1
+      to: 1
+  - platform: partition
+    name: LED 3
+    id: led3
+    default_transition_length: 0s
+    segments: 
+      - id: rgb_led
+      from: 2
+      to: 2
   - platform: esp32_rmt_led_strip
     pin: GPIO2
     rgb_order: GRB
@@ -285,11 +465,12 @@ light:
     rmt_channel: 0
     chipset: WS2812
     name: "Status LEDs"
-    id: status_led
+    id: rgb_led
+    default_transition_length: 0s
     on_turn_on:
       - then:
           - light.turn_on:
-              id: status_led
+              id: rgb_led
               brightness: !lambda |-
                 const auto val = id(night_mode).state ? id(led_night_mode).state : id(led_brightness).state;
                 return float(val) / 100;
@@ -300,48 +481,6 @@ light:
           transition_length: 1s
           update_interval: 1s
           name: "Boot Pulse"
-
-      # color effect used when unit is not connected to the api
-      - automation: 
-          name: "Standalone"
-          sequence:
-            - addressable_lambda:
-              name: "PM2.5 Air Quality"
-              id: status_led
-              lambda: |-
-                it.range(0, 2) = Color::BLACK;
-                
-                constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 3> ranges = {
-                  {numeric_limits<uint16_t>::min(), 35, Color(0, 255, 0)}, // green
-                  {35, 85, Color(255,165,0)}, // orange
-                  {85, numeric_limits<uint16_t>::max(), Color(255, 0, 0)} //red
-                };
-
-                for(size_t i=0;i<ranges.size();i++) {
-                  const auto [lower, upper, color] = e;
-                  if(sensor_value >= lower && sensor_value < higher) {
-                    it[i] = color;
-                  }
-                }
-              - delay: 30s
-            - addressable_lambda:
-              name: "CO2 Air Quality"
-              id: status_led
-              lambda: |-
-                it.range(0, 2) = Color::BLACK;
-                
-                constexpr std::array<std::tuple<uint16_t,uint16_t, Color>, 3> ranges = {
-                  {numeric_limits<uint16_t>::min(), 35, Color(0, 255, 0)}, // green
-                  {35, 85, Color(255,165,0)}, // orange
-                  {85, numeric_limits<uint16_t>::max(), Color(255, 0, 0)} //red
-                };
-
-                for(size_t i=0;i<ranges.size();i++) {
-                  const auto [lower, upper, color] = e;
-                  if(sensor_value >= lower && sensor_value < higher) {
-                    it[i] = color;
-                  }
-                }
 
 status_led:
   pin: $INT_LED_PIN
@@ -359,7 +498,7 @@ status_led:
 #     pages:
 #       - id: page1
 #         lambda: |-
-#           it.printf(5, 10, id(roboto), "PM2.5 %0.2f µg/m³", id(pm1006_pm_2_5).state);
+#           it.printf(5, 10, id(roboto), "PM2.5 %0.2f µg/m³", id(pm_2_5).state);
 #           it.printf(5, 15, id(roboto), "Temperature: %0.2f °C", id(scd4x_temperature).state);
 #           it.printf(5, 20, id(roboto), "Humidity: %0.2f %", id(scd4x_humidity).state);
 #       - id: page2
@@ -376,11 +515,31 @@ script:
       - delay: 20s
       - component.update: pm1006_module
       - sensor.template.publish:
-          id: pm1006_pm_2_5
+          id: pm2_5
           state: !lambda |-
             return id(_pm1006_pm_2_5).state;
       - delay: 200ms
       - fan.turn_off: pm1006_fan_ctrl
+  - id: min_max_zero_script
+    then: 
+      - globals.set:
+          id: pm_max
+          value: '0.0'
+      - globals.set:
+          id: pm_min
+          value: '300.0'
+      - globals.set:
+          id: co_max
+          value: '0.0'
+      - globals.set:
+          id: co_min
+          value: '5000.0'
+      - globals.set:
+          id: temp_min
+          value: '50.0'
+      - globals.set:
+          id: temp_max
+          value: '0.0'
 
 sun:
   latitude: ${pos-latitude}
