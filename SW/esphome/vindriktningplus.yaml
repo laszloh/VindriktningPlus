@@ -1,3 +1,32 @@
+substitutions:
+  # pinout
+  FAN_PIN: GPIO0
+  BUZZER_PIN: GPIO1
+  WS2812_PIN: GPIO2
+  BRIGHT_PIN: GPIO3
+  PM_TX_PIN: GPIO4
+  PM_RX_PIN: GPIO5
+  IR_REC_PIN: GPIO6
+  I2C_SCL: GPIO7
+  I2C_SDA: GPIO8
+  # BOOT_PIN: GPIO9
+  INT_LED_PIN: GPIO10
+  # default values
+  SCD4x_update_interval: 60s
+  temp_calibration: "-4"
+  ADC_update_interval: 60s
+  pm1006_update_interval: 60s
+  # limit values
+  aqi_co2_ideal_good: "600"
+  aqi_co2_max_good: "800"
+  aqi_co2_ideal_acceptable: "1000"
+  aqi_co2_max_acceptable: "1200"
+  aqi_pm2_5_avg_24h_max_good: "12"
+  aqi_pm2_5_avg_24h_max_acceptable: "25"  # WHO 2006
+  aqi_message_bad: "Bad"
+  aqi_message_acceptable: "Acceptable"
+  aqi_message_good: "Good"
+
 esphome:
   name: vindriktningplus
   friendly_name: VindriktningPlus
@@ -123,15 +152,15 @@ switch:
 
 # uart used for PM1006 exclusively
 uart:
-  rx_pin: GPIO4
-  tx_pin: GPIO5
+  rx_pin: $PM_TX_PIN
+  tx_pin: $PM_RX_PIN
   baud_rate: 9600
   id: uart_a
 
 # main i2c bus
 i2c:
-  scl: GPIO7
-  sda: GPIO8
+  scl: $I2C_SCL
+  sda: $I2C_SDA
   id: bus_a
   frequency: 100kHz
 
@@ -163,6 +192,7 @@ sensor:
   - platform: pm1006
     uart_id: uart_a
     id: pm1006_module
+    internal: never
     pm_2_5:
       internal: True
       id: _pm1006_pm_2_5
@@ -186,7 +216,8 @@ sensor:
       name: "Humidity"
       id: scd4x_humidity
     measurement_mode: low_power_periodic
-    update_interval: 60s
+    update_interval: $SCD4x_update_interval
+    temperature_offset: $temp_calibration
 
   # - platform: bme280
   #   i2c_id: bus_a
@@ -209,9 +240,10 @@ sensor:
 
   # Phototransistor
   - platform: adc
-    pin: GPIO3
+    pin: $BRIGHT_PIN
     name: Illuminance
     unit_of_measurement: lux
+    internal: $ADC_update_interval
     filters:
       - sliding_window_moving_average:
           window_size: 15
@@ -221,12 +253,12 @@ sensor:
 
 output:
   - platform: ledc
-    pin: GPIO0
+    pin: $FAN_PIN
     frequency: 25kHz
     id: pm1006_fan
     channel: 0
   - platform: ledc
-    pin: GPIO1
+    pin: $BUZZER_PIN
     channel: 2
     id: buzzer_out
 
@@ -238,7 +270,7 @@ fan:
     speed_count: 100
 
 remote_receiver:
-  pin: GPIO6
+  pin: $IR_REC_PIN
   dump: all
 
 rtttl:
@@ -311,6 +343,9 @@ light:
                   }
                 }
 
+status_led:
+  pin: $INT_LED_PIN
+
 # optional lcd
 # font:
 #   - file: "gfonts://Roboto"
@@ -368,7 +403,7 @@ sun:
             - switch.turn_on: night_mode
 
 interval:
-  - interval: 60s
+  - interval: $pm1006_update_interval
     id: pm1006_measurement
     then:
       - if:
