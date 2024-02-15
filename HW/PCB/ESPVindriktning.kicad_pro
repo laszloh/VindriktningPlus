@@ -45,7 +45,7 @@
         "silk_text_thickness": 0.15,
         "silk_text_upright": true,
         "zones": {
-          "min_clearance": 0.127
+          "min_clearance": 0.15
         }
       },
       "diff_pair_dimensions": [
@@ -673,7 +673,7 @@
         "name": "USB",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "schematic_color": "rgb(255, 0, 255)",
-        "track_width": 0.2088,
+        "track_width": 0.127,
         "via_diameter": 0.5,
         "via_drill": 0.3,
         "wire_width": 6
