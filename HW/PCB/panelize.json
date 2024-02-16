@@ -1,0 +1,44 @@
+{
+    "layout": {
+        "hspace": "6mm",
+        "vspace": "3mm",
+        "rows": "2",
+        "cols": "3"
+    },
+    "tabs": {
+        "type": "annotation",
+        "fillet": "1mm"
+    },
+    "cuts": {
+        "type": "mousebites"
+    },
+    "framing": {
+        "type": "railstb",
+        "vspace": "3mm",
+        "fillet": "1mm"
+    },
+    "tooling": {
+        "type": "3hole",
+        "hoffset": "2.5mm",
+        "voffset": "2.5mm"
+    },
+    "fiducials": {
+        "type": "3fid",
+        "hoffset": "5mm",
+        "voffset": "2.5mm"
+    },
+    "text": {
+        "type": "simple",
+        "voffset": "2.5mm",
+        "text": "JLCJLCJLCJLC"
+    },
+    "text2": {
+        "type": "simple",
+        "voffset": "-2.5mm",
+        "text": "VindriktningPlus rev. A, panelized on {date}",
+        "anchor": "mb"
+    },
+    "post": {
+        "millradius": "1mm"
+    }
+}
