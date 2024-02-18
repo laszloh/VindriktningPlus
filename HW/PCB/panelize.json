@@ -1,9 +1,11 @@
 {
     "layout": {
-        "hspace": "6mm",
-        "vspace": "3mm",
+        "type": "plugin",
+        "hspace": "5mm",
+        "vspace": "5mm",
         "rows": "2",
-        "cols": "3"
+        "cols": "3",
+        "code": "..\\staggered_layout.py.StaggeredLayout"
     },
     "tabs": {
         "type": "annotation",
@@ -24,8 +26,8 @@
     },
     "fiducials": {
         "type": "3fid",
-        "hoffset": "5mm",
-        "voffset": "2.5mm"
+        "hoffset": "8mm",
+        "voffset": "3.5mm"
     },
     "text": {
         "type": "simple",
